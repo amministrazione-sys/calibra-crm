@@ -1,0 +1,1306 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calibra · CRM Incassi</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+:root {
+  --bg:#0f1117; --surface:#181c27; --surface2:#1f2435; --border:#2a2f42;
+  --text:#e8eaf0; --muted:#6b7280; --accent:#4f7fff;
+  --green:#22c55e; --green-bg:rgba(34,197,94,.10);
+  --orange:#f59e0b; --orange-bg:rgba(245,158,11,.10);
+  --red:#ef4444; --red-bg:rgba(239,68,68,.10);
+  --radius:8px; --mono:'JetBrains Mono',monospace; --sans:'Inter',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.5}
+
+/* TOPBAR */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:56px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;gap:16px}
+.topbar-brand{font-weight:700;font-size:15px;letter-spacing:.04em;color:var(--accent);white-space:nowrap}
+.topbar-brand span{color:var(--muted);font-weight:400}
+.topbar-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.topbar-meta{font-size:12px;color:var(--muted);font-family:var(--mono)}
+.status-pill{display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 11px;border-radius:20px;border:1px solid var(--border);cursor:pointer;transition:all .15s;white-space:nowrap;background:transparent;color:var(--muted);font-family:var(--sans)}
+.status-pill:hover{border-color:var(--accent);color:var(--text)}
+.status-pill.connected{border-color:var(--green);color:var(--green)}
+.status-pill.syncing{border-color:var(--orange);color:var(--orange)}
+.status-pill.error{border-color:var(--red);color:var(--red)}
+.s-dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+
+/* MAIN */
+.main{padding:24px;max-width:1440px;margin:0 auto}
+
+/* IMPORT */
+.import-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;margin-bottom:24px}
+.panel-title{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px}
+.import-grid{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end}
+.import-slot label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em}
+.file-drop{border:1px dashed var(--border);border-radius:var(--radius);padding:9px 14px;cursor:pointer;transition:border-color .15s;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);min-height:38px}
+.file-drop:hover{border-color:var(--accent);color:var(--text)}
+.file-drop.loaded{border-color:var(--green);color:var(--green)}
+.file-drop input[type=file]{display:none}
+.btn-primary{background:var(--accent);color:#fff;border:none;border-radius:var(--radius);padding:0 20px;height:38px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;transition:opacity .15s;font-family:var(--sans)}
+.btn-primary:hover{opacity:.85}
+.btn-primary:disabled{opacity:.35;cursor:not-allowed}
+
+/* KPI */
+.kpi-strip{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:20px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+.kpi-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px}
+.kpi-value{font-family:var(--mono);font-size:18px;font-weight:500}
+.kpi-value.warn{color:var(--orange)}
+.kpi-value.danger{color:var(--red)}
+.kpi-value.ok{color:var(--green)}
+.kpi-sub{font-size:11px;color:var(--muted);margin-top:3px}
+
+/* ALERT */
+.alert-banner{border-radius:var(--radius);padding:11px 16px;margin-bottom:14px;font-size:13px;display:none;align-items:center;gap:10px}
+.alert-banner.show{display:flex}
+.alert-banner.danger{background:var(--red-bg);border:1px solid var(--red);color:var(--red)}
+
+/* FILTERS + ACTION BAR */
+.filters{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.filter-btn{padding:4px 13px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;cursor:pointer;transition:all .15s;font-family:var(--sans)}
+.filter-btn:hover{border-color:var(--accent);color:var(--text)}
+.filter-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.filter-btn.green.active{background:var(--green);border-color:var(--green);color:#000}
+.filter-btn.orange.active{background:var(--orange);border-color:var(--orange);color:#000}
+.filter-btn.red.active{background:var(--red);border-color:var(--red);color:#fff}
+.search-box{flex:1;min-width:180px;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 14px;color:var(--text);font-size:12px;font-family:var(--sans);outline:none}
+.search-box:focus{border-color:var(--accent)}
+.sede-tabs{display:flex}
+.sede-tab{padding:4px 15px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;font-weight:500;cursor:pointer;font-family:var(--sans)}
+.sede-tab:first-child{border-radius:20px 0 0 20px}
+.sede-tab:last-child{border-radius:0 20px 20px 0;border-left:none}
+.sede-tab.active{background:var(--surface2);color:var(--text);border-color:var(--accent)}
+
+/* SELECTION ACTION BAR */
+.action-bar{display:none;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--accent);border-radius:var(--radius);padding:10px 16px;margin-bottom:12px}
+.action-bar.show{display:flex}
+.action-bar-info{font-size:13px;font-weight:500;flex:1}
+.action-bar-info span{color:var(--accent);font-family:var(--mono)}
+.btn-sollecito{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:7px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--sans);display:flex;align-items:center;gap:6px}
+.btn-sollecito:hover{opacity:.85}
+.btn-deselect{background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:6px;padding:7px 12px;font-size:12px;cursor:pointer;font-family:var(--sans)}
+.btn-deselect:hover{color:var(--text);border-color:var(--text)}
+.btn-sel-red{background:transparent;color:var(--red);border:1px solid var(--red);border-radius:6px;padding:7px 12px;font-size:12px;cursor:pointer;font-family:var(--sans)}
+.btn-sel-red:hover{background:var(--red-bg)}
+
+/* TABLE */
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead th{background:var(--surface2);padding:9px 12px;text-align:left;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;border-bottom:1px solid var(--border)}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+tbody tr:last-child{border-bottom:none}
+tbody td{padding:8px 12px;vertical-align:middle}
+
+/* GROUP ROWS */
+.group-header{background:var(--surface2)!important;cursor:pointer}
+.group-header:hover{background:#252a3a!important}
+.group-header td{padding:10px 12px!important}
+.group-header.selected-group{background:#1a2340!important;border-left:3px solid var(--accent)}
+.group-toggle{font-size:10px;color:var(--muted);display:inline-block;transition:transform .15s;width:12px;margin-right:4px}
+.group-toggle.open{transform:rotate(90deg)}
+.client-name{font-weight:600;font-size:13px}
+.group-summary{font-size:11px;color:var(--muted);margin-top:2px}
+.client-note-inline{font-size:11px;color:var(--muted);font-style:italic;margin-top:2px;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.no-email-warn{font-size:11px;color:var(--orange);margin-top:2px}
+
+/* INVOICE ROWS */
+.inv-row td{padding:7px 12px!important;background:rgba(0,0,0,.15)}
+.inv-row:hover td{background:rgba(0,0,0,.25)!important}
+.inv-row.inv-selected td{background:rgba(79,127,255,.08)!important;border-left:2px solid var(--accent)}
+.inv-number{font-family:var(--mono);font-size:11px;color:var(--muted)}
+
+/* CHECKBOX */
+.cb-wrap{display:flex;align-items:center;justify-content:center}
+input[type=checkbox]{width:14px;height:14px;accent-color:var(--accent);cursor:pointer}
+
+/* BADGES */
+.age-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:12px;font-size:11px;font-weight:600;white-space:nowrap}
+.age-badge.green{background:var(--green-bg);color:var(--green)}
+.age-badge.orange{background:var(--orange-bg);color:var(--orange)}
+.age-badge.red{background:var(--red-bg);color:var(--red)}
+.dil-badge{display:inline-block;background:rgba(79,127,255,.12);color:var(--accent);border-radius:10px;padding:1px 7px;font-size:10px;font-family:var(--mono);margin-left:5px;vertical-align:middle}
+.email-badge{display:inline-block;background:rgba(34,197,94,.08);color:var(--green);border-radius:10px;padding:1px 7px;font-size:10px;margin-left:5px;vertical-align:middle}
+.sent-badge{display:inline-block;background:rgba(79,127,255,.08);color:var(--accent);border-radius:10px;padding:1px 7px;font-size:10px;font-family:var(--mono);margin-left:5px;vertical-align:middle}
+.sede-par{color:#a78bfa;font-size:11px;font-weight:500}
+.sede-reb{color:#34d399;font-size:11px;font-weight:500}
+.amount{font-family:var(--mono);font-size:13px;font-weight:500}
+
+/* ACTIONS */
+.actions{display:flex;gap:5px;flex-wrap:wrap}
+.btn-sm{padding:3px 9px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;cursor:pointer;transition:all .15s;font-family:var(--sans);white-space:nowrap}
+.btn-sm:hover{border-color:var(--accent);color:var(--accent)}
+.btn-sm.danger:hover{border-color:var(--red);color:var(--red)}
+
+/* NOTE ROWS */
+.note-row{background:var(--bg)!important}
+.note-row td{padding:6px 12px 10px 36px!important}
+.client-note-row{background:var(--bg)!important}
+.client-note-row td{padding:6px 12px 10px 24px!important}
+.note-area{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--sans);font-size:12px;padding:7px 10px;resize:vertical;min-height:56px;outline:none}
+.note-area:focus{border-color:var(--accent)}
+
+/* MODALS */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;z-index:200;padding:20px}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;width:460px;max-width:100%;max-height:90vh;overflow-y:auto}
+.modal.wide{width:680px}
+.modal.xl{width:820px}
+.modal h3{font-size:15px;font-weight:600;margin-bottom:16px}
+.modal label{display:block;font-size:11px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
+.modal input,.modal textarea,.modal select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--sans);font-size:13px;padding:8px 10px;outline:none;margin-bottom:13px}
+.modal input:focus,.modal textarea:focus,.modal select:focus{border-color:var(--accent)}
+.modal textarea{resize:vertical;min-height:80px;font-family:var(--mono);font-size:12px;line-height:1.6}
+.modal-hint{font-size:11px;color:var(--muted);margin-top:-10px;margin-bottom:13px;line-height:1.5}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+.btn-modal-ok{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--sans)}
+.btn-modal-ok:disabled{opacity:.4;cursor:not-allowed}
+.btn-modal-cancel{background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:6px;padding:8px 18px;font-size:13px;cursor:pointer;font-family:var(--sans)}
+.btn-modal-remove{background:transparent;color:var(--red);border:1px solid var(--red);border-radius:6px;padding:8px 14px;font-size:13px;cursor:pointer;font-family:var(--sans)}
+
+/* SOLLECITO MODAL */
+.sollecito-list{display:flex;flex-direction:column;gap:8px;margin-bottom:16px;max-height:320px;overflow-y:auto}
+.sollecito-item{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px 14px}
+.sollecito-item.no-email{border-color:var(--orange);opacity:.7}
+.sol-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.sol-client{font-weight:600;font-size:13px}
+.sol-email{font-size:12px;color:var(--muted);font-family:var(--mono)}
+.sol-email input{background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:12px;padding:3px 8px;outline:none;width:220px;margin-bottom:0}
+.sol-email input:focus{border-color:var(--accent)}
+.sol-invoices{font-size:11px;color:var(--muted);margin-top:4px}
+.sol-warning{font-size:11px;color:var(--orange);margin-top:4px}
+.sol-sent-log{font-size:11px;color:var(--accent);margin-top:2px}
+.template-section{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:14px;margin-bottom:14px}
+.template-section label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:block}
+.template-vars{font-size:11px;color:var(--muted);margin-top:-8px;margin-bottom:10px}
+.template-vars code{background:var(--surface2);padding:1px 5px;border-radius:3px;font-family:var(--mono)}
+.send-progress{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px 14px;margin-bottom:14px;display:none}
+.send-progress.show{display:block}
+.progress-bar-wrap{background:var(--border);border-radius:4px;height:4px;margin-top:8px}
+.progress-bar{background:var(--accent);height:4px;border-radius:4px;width:0%;transition:width .3s}
+
+/* DRIVE MODAL */
+.drive-step{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px 14px;margin-bottom:10px;font-size:12px;line-height:1.7}
+.drive-step strong{color:var(--accent)}
+.drive-step code{background:var(--surface2);padding:1px 5px;border-radius:4px;font-family:var(--mono);font-size:11px}
+hr.divider{border:none;border-top:1px solid var(--border);margin:14px 0}
+
+/* MISC */
+.empty-state{text-align:center;padding:60px 20px;color:var(--muted)}
+.empty-state .icon{font-size:44px;margin-bottom:14px}
+.empty-state h3{font-size:15px;font-weight:500;margin-bottom:6px;color:var(--text)}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:11px 18px;font-size:13px;z-index:400;transform:translateY(70px);opacity:0;transition:all .22s;pointer-events:none;max-width:340px}
+.toast.show{transform:translateY(0);opacity:1}
+.loading-row td{text-align:center;padding:40px;color:var(--muted)}
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:1000px){.kpi-strip{grid-template-columns:repeat(3,1fr)}.import-grid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-brand">Calibra <span>· CRM Incassi</span></div>
+  <div class="topbar-right">
+    <div class="topbar-meta" id="last-update">Nessun dato caricato</div>
+    <button class="status-pill" id="drive-status" onclick="openModal('modal-drive')">
+      <div class="s-dot"></div><span id="drive-lbl">Drive: non configurato</span>
+    </button>
+    <button class="status-pill" onclick="openModal('modal-template')" title="Configura template solleciti">
+      ✉ Template
+    </button>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- IMPORT -->
+  <div class="import-panel">
+    <div class="panel-title">Carica file settimanali</div>
+    <div class="import-grid">
+      <div class="import-slot">
+        <label>Fatture da incassare · Parella (PDF)</label>
+        <div class="file-drop" id="drop-par" onclick="document.getElementById('file-par').click()">
+          <input type="file" id="file-par" accept=".pdf" onchange="handleFile('par',this)">
+          <span id="drop-par-label">↑ Scegli PDF Parella</span>
+        </div>
+      </div>
+      <div class="import-slot">
+        <label>Fatture da incassare · Rebaudengo (PDF)</label>
+        <div class="file-drop" id="drop-reb" onclick="document.getElementById('file-reb').click()">
+          <input type="file" id="file-reb" accept=".pdf" onchange="handleFile('reb',this)">
+          <span id="drop-reb-label">↑ Scegli PDF Rebaudengo</span>
+        </div>
+      </div>
+      <div class="import-slot">
+        <label>Controllo di gestione (XLSX)</label>
+        <div class="file-drop" id="drop-xlsx" onclick="document.getElementById('file-xlsx').click()">
+          <input type="file" id="file-xlsx" accept=".xlsx,.xls" onchange="handleFile('xlsx',this)">
+          <span id="drop-xlsx-label">↑ Scegli XLSX</span>
+        </div>
+      </div>
+      <button class="btn-primary" id="btn-import" onclick="importAll()" disabled>Importa</button>
+    </div>
+  </div>
+
+  <!-- KPI -->
+  <div class="kpi-strip">
+    <div class="kpi"><div class="kpi-label">Da incassare · Parella</div><div class="kpi-value" id="kpi-par-total">—</div><div class="kpi-sub" id="kpi-par-count">—</div></div>
+    <div class="kpi"><div class="kpi-label">Da incassare · Rebaudengo</div><div class="kpi-value" id="kpi-reb-total">—</div><div class="kpi-sub" id="kpi-reb-count">—</div></div>
+    <div class="kpi"><div class="kpi-label">Media 6m · Parella</div><div class="kpi-value" id="kpi-par-media">—</div><div class="kpi-sub">Soglia 1.5×: <span id="kpi-par-soglia">—</span></div></div>
+    <div class="kpi"><div class="kpi-label">Media 6m · Rebaudengo</div><div class="kpi-value" id="kpi-reb-media">—</div><div class="kpi-sub">Soglia 1.5×: <span id="kpi-reb-soglia">—</span></div></div>
+    <div class="kpi"><div class="kpi-label">🔴 Critiche (&gt;30gg)</div><div class="kpi-value danger" id="kpi-red">—</div><div class="kpi-sub" id="kpi-red-amt">—</div></div>
+    <div class="kpi"><div class="kpi-label">🟠 Da verificare (8–30gg)</div><div class="kpi-value warn" id="kpi-orange">—</div><div class="kpi-sub" id="kpi-orange-amt">—</div></div>
+  </div>
+
+  <div class="alert-banner danger" id="alert-par">⚠ Parella — il credito aperto supera 1.5× la media mensile degli ultimi 6 mesi.</div>
+  <div class="alert-banner danger" id="alert-reb">⚠ Rebaudengo — il credito aperto supera 1.5× la media mensile degli ultimi 6 mesi.</div>
+
+  <!-- FILTERS -->
+  <div class="filters">
+    <div class="sede-tabs">
+      <button class="sede-tab active" onclick="setSede('all',this)">Tutte le sedi</button>
+      <button class="sede-tab" onclick="setSede('par',this)">Parella</button>
+      <button class="sede-tab" onclick="setSede('reb',this)">Rebaudengo</button>
+    </div>
+    <button class="filter-btn active" onclick="setFilter('all',this)">Tutti</button>
+    <button class="filter-btn green"  onclick="setFilter('green',this)">🟢 Recenti</button>
+    <button class="filter-btn orange" onclick="setFilter('orange',this)">🟠 Da verificare</button>
+    <button class="filter-btn red"    onclick="setFilter('red',this)">🔴 Critiche</button>
+    <input class="search-box" type="text" placeholder="Cerca cliente…" oninput="setSearch(this.value)">
+  </div>
+
+  <!-- SELECTION ACTION BAR -->
+  <div class="action-bar" id="action-bar">
+    <div class="action-bar-info">
+      <span id="sel-count">0</span> fatture selezionate
+      <span id="sel-amount" style="color:var(--muted);margin-left:8px;font-size:12px"></span>
+    </div>
+    <button class="btn-sel-red" onclick="selectAllRed()">Seleziona tutte le 🔴</button>
+    <button class="btn-deselect" onclick="clearSelection()">Deseleziona tutto</button>
+    <button class="btn-sollecito" onclick="openSollecito()">✉ Invia solleciti</button>
+  </div>
+
+  <!-- TABLE -->
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th style="width:36px"><input type="checkbox" id="cb-all" onchange="toggleAllVisible(this)" title="Seleziona/deseleziona tutti visibili"></th>
+        <th>Cliente</th>
+        <th>Sede</th>
+        <th>Fatture</th>
+        <th>Stato peggiore</th>
+        <th>Totale da incassare</th>
+        <th>Azioni</th>
+      </tr></thead>
+      <tbody id="table-body">
+        <tr><td colspan="7"><div class="empty-state"><div class="icon">📂</div><h3>Nessun dato caricato</h3><p>Carica i tre file settimanali per visualizzare le partite aperte.</p></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div><!-- /main -->
+
+<!-- ══ MODAL: DILAZIONE ══ -->
+<div class="modal-overlay" id="modal-dil">
+  <div class="modal">
+    <h3>Dilazione cliente</h3>
+    <label>Cliente</label>
+    <input type="text" id="dil-cliente" readonly style="opacity:.6;cursor:default">
+    <label>Giorni di dilazione concessi</label>
+    <input type="number" id="dil-giorni" min="0" max="730" placeholder="es. 30">
+    <label>Note accordo</label>
+    <input type="text" id="dil-nota" placeholder="es. accordo telefonico 10/06/2026">
+    <div class="modal-actions">
+      <button class="btn-modal-remove" id="btn-dil-remove" onclick="removeDilazione()" style="display:none">Rimuovi</button>
+      <button class="btn-modal-cancel" onclick="closeModal('modal-dil')">Annulla</button>
+      <button class="btn-modal-ok" onclick="saveDilazione()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: TEMPLATE SOLLECITI ══ -->
+<div class="modal-overlay" id="modal-template">
+  <div class="modal wide">
+    <h3>✉ Template solleciti</h3>
+    <div class="template-section">
+      <label>Oggetto email</label>
+      <input type="text" id="tpl-subject" placeholder="Sollecito pagamento fatture — Calibra Pratiche Auto">
+      <label>Corpo email</label>
+      <div class="template-vars">Variabili disponibili: <code>{{cliente}}</code> <code>{{lista_fatture}}</code> <code>{{totale}}</code> <code>{{sede}}</code> <code>{{data_oggi}}</code></div>
+      <textarea id="tpl-body" rows="12" placeholder="Testo email…"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="resetTemplate()">Ripristina default</button>
+      <button class="btn-modal-cancel" onclick="closeModal('modal-template')">Chiudi</button>
+      <button class="btn-modal-ok" onclick="saveTemplate()">Salva template</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: SOLLECITO PREVIEW/INVIO ══ -->
+<div class="modal-overlay" id="modal-sollecito">
+  <div class="modal xl">
+    <h3>✉ Invia solleciti di pagamento</h3>
+
+    <div class="send-progress" id="send-progress">
+      <div style="font-size:12px;color:var(--muted)" id="send-progress-text">Invio in corso…</div>
+      <div class="progress-bar-wrap"><div class="progress-bar" id="send-progress-bar"></div></div>
+    </div>
+
+    <div class="sollecito-list" id="sollecito-list"></div>
+
+    <details style="margin-bottom:14px">
+      <summary style="cursor:pointer;font-size:12px;color:var(--muted);padding:6px 0">Modifica testo email (questa sessione)</summary>
+      <div style="margin-top:10px">
+        <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:4px">Oggetto</label>
+        <input type="text" id="sol-subject-preview" style="margin-bottom:10px">
+        <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:4px">Corpo</label>
+        <textarea id="sol-body-preview" rows="8"></textarea>
+      </div>
+    </details>
+
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="closeModal('modal-sollecito')">Annulla</button>
+      <button class="btn-modal-ok" id="btn-send-all" onclick="sendAllSolleciti()">✉ Invia a tutti</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: DRIVE SETUP ══ -->
+<div class="modal-overlay" id="modal-drive">
+  <div class="modal wide">
+    <h3>☁ Sincronizzazione Google Drive</h3>
+    <div class="drive-step">
+      <strong>Come funziona:</strong> note, dilazioni e storico solleciti vengono salvati in
+      <code>calibra_crm_data.json</code> sul tuo Google Drive. Da qualsiasi PC apri questo file HTML,
+      ti connetti, e i dati sono sincronizzati.
+    </div>
+    <div class="drive-step">
+      <strong>Configurazione iniziale (una tantum):</strong><br>
+      1. Vai su <strong>console.cloud.google.com</strong> con <code>amministrazione@calibrapa.com</code><br>
+      2. Crea progetto → es. <code>calibra-crm</code><br>
+      3. <strong>API e servizi → Libreria</strong> → abilita <strong>Google Drive API</strong> e <strong>Gmail API</strong><br>
+      4. <strong>Credenziali → Crea → OAuth 2.0 Client ID → Applicazione web</strong><br>
+      5. In <em>Origini JavaScript autorizzate</em> aggiungi: <code>null</code><br>
+      6. Copia il <strong>Client ID</strong> e incollalo qui sotto
+    </div>
+    <hr class="divider">
+    <label>Google OAuth Client ID</label>
+    <input type="text" id="drive-client-id" placeholder="xxxxxxxxxxxx.apps.googleusercontent.com">
+    <div class="modal-hint">Il Client ID viene salvato solo localmente, non viene mai trasmesso ad altri server.</div>
+    <div class="modal-actions">
+      <button class="btn-modal-remove" id="btn-drive-disconnect" onclick="driveDisconnect()" style="display:none">Disconnetti</button>
+      <button class="btn-modal-cancel" onclick="closeModal('modal-drive')">Chiudi</button>
+      <button class="btn-modal-ok" onclick="driveConnect()">Connetti e autorizza</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: TOKEN PASTE ══ -->
+<div class="modal-overlay" id="modal-token-paste">
+  <div class="modal">
+    <h3>🔑 Incolla il token di autorizzazione</h3>
+    <div class="drive-step" style="margin-bottom:14px">
+      Si è aperta una nuova scheda con la schermata di consenso Google.<br><br>
+      <strong>1.</strong> Accedi con <code>amministrazione@calibrapa.com</code> e autorizza<br>
+      <strong>2.</strong> Il browser ti porta su una pagina <code>localhost</code> con errore — è normale<br>
+      <strong>3.</strong> <strong>Copia l'intero URL</strong> dalla barra del browser di quella scheda<br>
+      <strong>4.</strong> Incollalo qui sotto e clicca Connetti
+    </div>
+    <label>URL dalla barra del browser (scheda localhost)</label>
+    <textarea id="token-paste-input" rows="3" placeholder="https://localhost/#access_token=ya29.xxxxx..."></textarea>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="closeModal('modal-token-paste')">Annulla</button>
+      <button class="btn-modal-ok" onclick="confirmTokenPaste()">Connetti</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+//  CONSTANTS & STATE
+// ══════════════════════════════════════════════════════════════
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const DRIVE_FILENAME  = 'calibra_crm_data.json';
+const DRIVE_SCOPE     = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send';
+const SENDER_EMAIL    = 'amministrazione@calibrapa.com';
+
+const DEFAULT_SUBJECT = 'Sollecito pagamento fatture — Calibra Pratiche Auto';
+const DEFAULT_BODY =
+`Gentile {{cliente}},
+
+con la presente La contattamo per sollecitare il pagamento delle seguenti fatture ancora in sospeso:
+
+{{lista_fatture}}
+
+Totale da saldare: {{totale}}
+
+La preghiamo di provvedere al pagamento entro i prossimi giorni o di contattarci per concordare eventuali modalità alternative.
+
+Restiamo a disposizione per qualsiasi chiarimento.
+
+Cordiali saluti,
+Calibra Pratiche Auto — {{sede}}
+amministrazione@calibrapa.com`;
+
+let fileBuffers   = { par:null, reb:null, xlsx:null };
+let invoices      = [];
+let emailDB       = {};   // clienteKey -> email
+let kpiData       = { par:{media:0,soglia:0}, reb:{media:0,soglia:0} };
+let crm           = loadLocalCRM();
+let selectedInvIds= new Set();  // invoice IDs selected for sollecito
+let expandedGroups= new Set();
+let activeFilter  = 'all', activeSede='all', searchQuery='';
+let dilModalKey   = null;
+let driveToken    = null, driveFileId = null;
+
+// ══════════════════════════════════════════════════════════════
+//  PERSIST LOCAL
+// ══════════════════════════════════════════════════════════════
+function loadLocalCRM() {
+  try {
+    const d = JSON.parse(localStorage.getItem('calibra_crm') || '{}');
+    return {
+      notes:       d.notes       || {},
+      dilazioni:   d.dilazioni   || {},
+      clientNotes: d.clientNotes || {},
+      emailDB:     d.emailDB     || {},
+      sentLog:     d.sentLog     || {},   // invId -> [{date, to}]
+      template:    d.template    || { subject: DEFAULT_SUBJECT, body: DEFAULT_BODY },
+    };
+  } catch(e) {
+    return { notes:{}, dilazioni:{}, clientNotes:{}, emailDB:{}, sentLog:{},
+             template:{ subject:DEFAULT_SUBJECT, body:DEFAULT_BODY } };
+  }
+}
+function saveLocalCRM() { localStorage.setItem('calibra_crm', JSON.stringify(crm)); }
+async function saveCRM() { saveLocalCRM(); if (driveToken) await driveSave(); }
+
+// ══════════════════════════════════════════════════════════════
+//  EMAIL DB  (merged from crm.emailDB + external XLSX if any)
+// ══════════════════════════════════════════════════════════════
+function getEmail(clienteKey) { return crm.emailDB[clienteKey] || ''; }
+function setEmail(clienteKey, email) {
+  crm.emailDB[clienteKey] = email.trim();
+  saveCRM();
+}
+
+// ══════════════════════════════════════════════════════════════
+//  GOOGLE DRIVE
+// ══════════════════════════════════════════════════════════════
+function getDriveClientId() { return localStorage.getItem('calibra_drive_client_id') || ''; }
+
+function openDriveModal_setup() {
+  document.getElementById('drive-client-id').value = getDriveClientId();
+  document.getElementById('btn-drive-disconnect').style.display = driveToken ? 'inline-block' : 'none';
+  openModal('modal-drive');
+}
+
+function driveDisconnect() {
+  driveToken = null; driveFileId = null;
+  localStorage.removeItem('calibra_drive_token');
+  setDriveStatus('idle','Drive: non configurato');
+  closeModal('modal-drive');
+  toast('Disconnesso da Google Drive');
+}
+
+function driveConnect() {
+  const cid = document.getElementById('drive-client-id').value.trim();
+  if (!cid) { toast('Inserisci il Client ID', true); return; }
+  localStorage.setItem('calibra_drive_client_id', cid);
+  closeModal('modal-drive');
+  // Open Google OAuth in a new tab — redirect goes to https://localhost
+  // The token appears in the URL bar of that tab; user copies it back here
+  const params = new URLSearchParams({
+    client_id:     cid,
+    redirect_uri:  'https://localhost',
+    response_type: 'token',
+    scope:         DRIVE_SCOPE,
+  });
+  const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + params;
+  window.open(authUrl, '_blank');
+  // Show token paste dialog after a short delay
+  setTimeout(() => openTokenPasteModal(), 1500);
+}
+
+function openTokenPasteModal() {
+  // Show instructions modal for pasting the token from localhost URL
+  const overlay = document.getElementById('modal-token-paste');
+  overlay.classList.add('open');
+  document.getElementById('token-paste-input').value = '';
+  document.getElementById('token-paste-input').focus();
+}
+
+function confirmTokenPaste() {
+  const raw = document.getElementById('token-paste-input').value.trim();
+  if (!raw) { toast('Incolla l\'URL o il token', true); return; }
+
+  let token = raw;
+  // If user pasted the full URL, extract access_token from fragment
+  if (raw.includes('access_token=')) {
+    const fragment = raw.includes('#') ? raw.split('#')[1] : raw.split('?')[1] || '';
+    const p = new URLSearchParams(fragment);
+    token = p.get('access_token') || '';
+  }
+  if (!token) { toast('Token non trovato nell\'URL — riprova', true); return; }
+
+  driveToken = token;
+  closeModal('modal-token-paste');
+  setDriveStatus('syncing','Drive: sincronizzazione…');
+  toast('✓ Token acquisito — carico dati da Drive…');
+  driveLoad().then(() => { setDriveStatus('connected','Drive: sincronizzato ✓'); renderTable(); updateKPIs(); });
+}
+
+function checkDriveAuthReturn() {
+  // Legacy: handle if somehow token arrives in hash of this page
+  const hash = window.location.hash;
+  if (!hash.includes('access_token')) return false;
+  const p = new URLSearchParams(hash.substring(1));
+  const token = p.get('access_token');
+  if (!token) return false;
+  driveToken = token;
+  history.replaceState(null,'',window.location.pathname);
+  setDriveStatus('syncing','Drive: sincronizzazione…');
+  toast('✓ Connesso a Google Drive — carico dati…');
+  driveLoad().then(() => { setDriveStatus('connected','Drive: sincronizzato ✓'); renderTable(); updateKPIs(); });
+  return true;
+}
+
+function setDriveStatus(cls, lbl) {
+  const el = document.getElementById('drive-status');
+  el.className = 'status-pill ' + cls;
+  document.getElementById('drive-lbl').textContent = lbl;
+}
+
+async function driveLoad() {
+  if (!driveToken) return;
+  try {
+    const q   = encodeURIComponent(`name='${DRIVE_FILENAME}' and trashed=false`);
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`,
+      { headers:{ Authorization:'Bearer '+driveToken } });
+    const d   = await res.json();
+    if (d.files && d.files.length) {
+      driveFileId = d.files[0].id;
+      const c = await fetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`,
+        { headers:{ Authorization:'Bearer '+driveToken } });
+      const remote = await c.json();
+      crm.dilazioni   = { ...crm.dilazioni,   ...(remote.dilazioni   ||{}) };
+      crm.clientNotes = { ...crm.clientNotes, ...(remote.clientNotes ||{}) };
+      crm.notes       = { ...crm.notes,       ...(remote.notes       ||{}) };
+      crm.emailDB     = { ...crm.emailDB,     ...(remote.emailDB     ||{}) };
+      crm.sentLog     = { ...crm.sentLog,     ...(remote.sentLog     ||{}) };
+      if (remote.template) crm.template = remote.template;
+      saveLocalCRM();
+      toast('Dati caricati da Drive');
+    }
+  } catch(e) { console.error(e); setDriveStatus('error','Drive: errore'); }
+}
+
+async function driveSave() {
+  if (!driveToken) return;
+  setDriveStatus('syncing','Drive: salvataggio…');
+  try {
+    const body = JSON.stringify(crm);
+    if (driveFileId) {
+      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=media`,
+        { method:'PATCH', headers:{ Authorization:'Bearer '+driveToken,'Content-Type':'application/json' }, body });
+    } else {
+      const m = await (await fetch('https://www.googleapis.com/drive/v3/files',
+        { method:'POST', headers:{ Authorization:'Bearer '+driveToken,'Content-Type':'application/json' },
+          body: JSON.stringify({name:DRIVE_FILENAME,mimeType:'application/json'}) })).json();
+      driveFileId = m.id;
+      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=media`,
+        { method:'PATCH', headers:{ Authorization:'Bearer '+driveToken,'Content-Type':'application/json' }, body });
+    }
+    setDriveStatus('connected','Drive: sincronizzato ✓');
+  } catch(e) { console.error(e); setDriveStatus('error','Drive: errore sync'); }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  FILE IMPORT
+// ══════════════════════════════════════════════════════════════
+function handleFile(type,input) {
+  const f = input.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = e => {
+    fileBuffers[type]=e.target.result;
+    document.getElementById('drop-'+type+'-label').textContent='✓ '+f.name;
+    document.getElementById('drop-'+type).classList.add('loaded');
+    checkImportReady();
+  };
+  r.readAsArrayBuffer(f);
+}
+function checkImportReady() {
+  document.getElementById('btn-import').disabled=!(fileBuffers.par&&fileBuffers.reb&&fileBuffers.xlsx);
+}
+
+async function importAll() {
+  const btn=document.getElementById('btn-import');
+  btn.disabled=true; btn.textContent='Elaborazione…';
+  document.getElementById('table-body').innerHTML=
+    '<tr class="loading-row"><td colspan="7"><span class="spinner"></span>Lettura PDF e calcolo fatturato…</td></tr>';
+  try {
+    const [parInv,rebInv]=await Promise.all([parsePDF(fileBuffers.par,'par'),parsePDF(fileBuffers.reb,'reb')]);
+    kpiData=parseXLSX(fileBuffers.xlsx);
+    invoices=[...parInv,...rebInv];
+    expandedGroups=new Set(invoices.map(i=>i.clienteKey));
+    selectedInvIds=new Set();
+    updateKPIs(); renderTable(); updateActionBar();
+    const now=new Date().toLocaleString('it-IT');
+    document.getElementById('last-update').textContent='Aggiornato: '+now;
+    crm.lastImport=now; await saveCRM();
+    const g=groupInvoices(invoices);
+    toast('Importazione completata — '+invoices.length+' fatture, '+g.length+' clienti');
+  } catch(err) {
+    console.error(err);
+    document.getElementById('table-body').innerHTML=
+      '<tr><td colspan="7"><div class="empty-state"><div class="icon">⚠️</div><h3>Errore importazione</h3><p>'+err.message+'</p></div></td></tr>';
+    toast('Errore: '+err.message,true);
+  }
+  btn.disabled=false; btn.textContent='Importa';
+}
+
+// ══════════════════════════════════════════════════════════════
+//  PDF PARSER
+// ══════════════════════════════════════════════════════════════
+async function parsePDF(buffer,sede) {
+  const pdf=await pdfjsLib.getDocument({data:buffer}).promise;
+  let lines=[];
+  for (let p=1;p<=pdf.numPages;p++) {
+    const page=await pdf.getPage(p);
+    const content=await page.getTextContent();
+    const byY={};
+    for (const item of content.items) {
+      const y=Math.round(item.transform[5]);
+      if (!byY[y]) byY[y]=[];
+      byY[y].push({x:item.transform[4],str:item.str});
+    }
+    const ys=Object.keys(byY).map(Number).sort((a,b)=>b-a);
+    for (const y of ys) {
+      const s=byY[y].sort((a,b)=>a.x-b.x).map(i=>i.str).join(' ').trim();
+      if (s) lines.push(s);
+    }
+  }
+  return extractInvoices(lines,sede);
+}
+function parseItalianNum(s) {
+  s=s.replace('*','');
+  if (/^\d+\.\d{2}$/.test(s)) return parseFloat(s);
+  return parseFloat(s.replace(/\./g,'').replace(',','.'));
+}
+function isZeroToken(s){return s==='0.00'||s==='0,00'||s==='0';}
+function extractInvoices(lines,sede) {
+  const results=[];
+  let cc=null;
+  const cRe=/^([A-ZÀÁÂ][A-Z0-9\s.\-'&/àáâãäåæçèéêëìíîïðñòóôõö]{2,})\s*-\s*CF:/;
+  const iRe=/^(\d+\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})/;
+  const dRe=/^\d{2}\/\d{2}\/\d{4}$/;
+  for (const line of lines) {
+    if (/^TOTALI\b/.test(line)||/^\(\*\)/.test(line)||/^NUMERO\s+DATA/.test(line)) continue;
+    if (/^Pag\s+\d+$/.test(line)||/^CALIBRA PRATICHE AUTO\s+Pag/.test(line)) continue;
+    if (/^I documenti emessi/.test(line)||/^Fatture$/.test(line)) continue;
+    const cm=cRe.exec(line); if (cm){cc=cm[1].trim();continue;}
+    if (!cc) continue;
+    const im=iRe.exec(line); if (!im) continue;
+    const parts=line.split(/\s+/);
+    const last=parts[parts.length-1];
+    if (isZeroToken(last)) continue;
+    if (dRe.test(last)&&isZeroToken(parts[parts.length-2])) continue;
+    const nums=[];
+    for (let i=2;i<parts.length;i++){
+      const p=parts[i];
+      if (p==='2,00*'||p==='2,00') continue;
+      if (dRe.test(p)) continue;
+      const n=parseItalianNum(p);
+      if (!isNaN(n)) nums.push(n);
+    }
+    if (nums.length<2) continue;
+    const da_pagare=nums[nums.length-1];
+    const totale=nums[nums.length-2];
+    if (da_pagare<=0) continue;
+    const [d,m,y]=parts[1].split('/');
+    const key=cc.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
+    results.push({
+      id:sede+'_'+parts[0]+'_'+parts[1].replace(/\//g,''),
+      sede, cliente:cc, clienteKey:key,
+      numero:parts[0], data:parts[1],
+      dataObj:new Date(+y,+m-1,+d),
+      totale, da_pagare,
+    });
+  }
+  return results;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  XLSX PARSER
+// ══════════════════════════════════════════════════════════════
+function parseXLSX(buffer) {
+  const wb=XLSX.read(buffer,{type:'array'});
+  const ws=wb.Sheets['FATTURATO MENSILE'];
+  if (!ws) return {par:{media:0,soglia:0},reb:{media:0,soglia:0}};
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+  const MONTHS=['GEN','FEB','MAR','APR','MAG','GIU','LUG','AGO','SET','OTT','NOV','DIC'];
+  let section=null,parHdr=null,rebHdr=null;
+  const parData={},rebData={};
+  for (const row of rows) {
+    if (!row||row[0]==null) continue;
+    const c0=String(row[0]).trim();
+    if (c0==='  PARELLA'||c0==='PARELLA'){section='par';continue;}
+    if (c0==='  REBAUDENGO'||c0==='REBAUDENGO'){section='reb';continue;}
+    if (c0==='  TOTALE'||c0==='TOTALE'){section=null;continue;}
+    if (c0==='MESE'){if(section==='par')parHdr=row;if(section==='reb')rebHdr=row;continue;}
+    if (MONTHS.includes(c0)){
+      if (section==='par'&&parHdr){const i25=parHdr.indexOf('2025'),i26=parHdr.indexOf('2026');parData[c0]={v2025:row[i25],v2026:row[i26]};}
+      if (section==='reb'&&rebHdr){const i25=rebHdr.indexOf('2025'),i26=rebHdr.indexOf('2026');rebData[c0]={v2025:row[i25],v2026:row[i26]};}
+    }
+  }
+  function last6(data){
+    const t=[{m:'DIC',k:'v2025'},{m:'GEN',k:'v2026'},{m:'FEB',k:'v2026'},{m:'MAR',k:'v2026'},{m:'APR',k:'v2026'},{m:'MAG',k:'v2026'}];
+    const v=t.map(x=>data[x.m]&&data[x.m][x.k]).filter(x=>x!=null&&!isNaN(x)&&x>0);
+    if (!v.length) return {media:0,soglia:0};
+    const media=v.reduce((a,b)=>a+b,0)/v.length;
+    return {media:Math.round(media*100)/100,soglia:Math.round(media*1.5*100)/100};
+  }
+  return {par:last6(parData),reb:last6(rebData)};
+}
+
+// ══════════════════════════════════════════════════════════════
+//  AGING & GROUPING
+// ══════════════════════════════════════════════════════════════
+function getAge(inv) {
+  const today=new Date();today.setHours(0,0,0,0);
+  const days=Math.floor((today-inv.dataObj)/86400000);
+  const dil=crm.dilazioni[inv.clienteKey];
+  const extra=dil?(parseInt(dil.giorni)||0):0;
+  if (days<=7+extra)  return {color:'green',days};
+  if (days<=30+extra) return {color:'orange',days};
+  return {color:'red',days};
+}
+const colorOrd={red:0,orange:1,green:2};
+function worstColor(invList){return invList.map(i=>getAge(i).color).sort((a,b)=>colorOrd[a]-colorOrd[b])[0]||'green';}
+
+function groupInvoices(invList) {
+  const map={};
+  for (const inv of invList){
+    if (!map[inv.clienteKey]) map[inv.clienteKey]={key:inv.clienteKey,nome:inv.cliente,sede:inv.sede,invs:[]};
+    map[inv.clienteKey].invs.push(inv);
+  }
+  const groups=Object.values(map);
+  for (const g of groups){
+    g.invs.sort((a,b)=>a.dataObj-b.dataObj);
+    g.oldestDate=g.invs[0].dataObj;
+    g.worstColor=worstColor(g.invs);
+    g.totalDaPagare=g.invs.reduce((s,i)=>s+i.da_pagare,0);
+  }
+  groups.sort((a,b)=>{
+    if (colorOrd[a.worstColor]!==colorOrd[b.worstColor]) return colorOrd[a.worstColor]-colorOrd[b.worstColor];
+    return a.oldestDate-b.oldestDate;
+  });
+  return groups;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  KPIs
+// ══════════════════════════════════════════════════════════════
+const fmt=n=>n?'€\u202f'+n.toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
+function updateKPIs(){
+  const par=invoices.filter(i=>i.sede==='par');
+  const reb=invoices.filter(i=>i.sede==='reb');
+  const pT=par.reduce((a,i)=>a+i.da_pagare,0);
+  const rT=reb.reduce((a,i)=>a+i.da_pagare,0);
+  document.getElementById('kpi-par-total').textContent=fmt(pT);
+  document.getElementById('kpi-reb-total').textContent=fmt(rT);
+  document.getElementById('kpi-par-count').textContent=par.length+' partite aperte';
+  document.getElementById('kpi-reb-count').textContent=reb.length+' partite aperte';
+  document.getElementById('kpi-par-media').textContent=fmt(kpiData.par.media);
+  document.getElementById('kpi-reb-media').textContent=fmt(kpiData.reb.media);
+  document.getElementById('kpi-par-soglia').textContent=fmt(kpiData.par.soglia);
+  document.getElementById('kpi-reb-soglia').textContent=fmt(kpiData.reb.soglia);
+  const parOk=kpiData.par.soglia>0&&pT>kpiData.par.soglia;
+  const rebOk=kpiData.reb.soglia>0&&rT>kpiData.reb.soglia;
+  document.getElementById('kpi-par-total').className='kpi-value '+(parOk?'danger':'ok');
+  document.getElementById('kpi-reb-total').className='kpi-value '+(rebOk?'danger':'ok');
+  document.getElementById('alert-par').classList.toggle('show',parOk);
+  document.getElementById('alert-reb').classList.toggle('show',rebOk);
+  const aged=invoices.map(i=>({...i,age:getAge(i)}));
+  const reds=aged.filter(i=>i.age.color==='red');
+  const orgs=aged.filter(i=>i.age.color==='orange');
+  document.getElementById('kpi-red').textContent=reds.length;
+  document.getElementById('kpi-orange').textContent=orgs.length;
+  document.getElementById('kpi-red-amt').textContent=reds.reduce((a,i)=>a+i.da_pagare,0).toLocaleString('it-IT',{style:'currency',currency:'EUR'});
+  document.getElementById('kpi-orange-amt').textContent=orgs.reduce((a,i)=>a+i.da_pagare,0).toLocaleString('it-IT',{style:'currency',currency:'EUR'});
+}
+
+// ══════════════════════════════════════════════════════════════
+//  RENDER TABLE
+// ══════════════════════════════════════════════════════════════
+function renderTable(){
+  const tbody=document.getElementById('table-body');
+  let filtered=invoices.filter(inv=>{
+    if (activeSede!=='all'&&inv.sede!==activeSede) return false;
+    if (activeFilter!=='all'&&getAge(inv).color!==activeFilter) return false;
+    if (searchQuery&&!inv.cliente.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    return true;
+  });
+  if (!filtered.length){
+    tbody.innerHTML='<tr><td colspan="7"><div class="empty-state"><div class="icon">🔍</div><h3>Nessuna partita</h3><p>Nessuna fattura corrisponde ai filtri.</p></div></td></tr>';
+    return;
+  }
+  const groups=groupInvoices(filtered);
+  tbody.innerHTML='';
+  for (const g of groups){
+    const dil=crm.dilazioni[g.key];
+    const cNote=(crm.clientNotes||{})[g.key]||'';
+    const email=getEmail(g.key);
+    const isExp=expandedGroups.has(g.key);
+    const worst=g.worstColor;
+    const dot=worst==='red'?'🔴':worst==='orange'?'🟠':'🟢';
+    const dilBadge=dil?`<span class="dil-badge">+${dil.giorni}gg</span>`:'';
+    const emailBadge=email?`<span class="email-badge">✉</span>`:
+      `<span style="font-size:10px;color:var(--orange);margin-left:5px;vertical-align:middle">⚠ no email</span>`;
+    const sedeLbl=g.sede==='par'?'<span class="sede-par">Parella</span>':'<span class="sede-reb">Rebaudengo</span>';
+    const cNoteSnip=cNote?`<div class="client-note-inline" title="${esc(cNote)}">📝 ${cNote}</div>`:'';
+    const oldestAge=getAge(g.invs[0]);
+    // Check if any invoice in group selected
+    const anySelected=g.invs.some(i=>selectedInvIds.has(i.id));
+    const allSelected=g.invs.every(i=>selectedInvIds.has(i.id));
+
+    // Group header checkbox state
+    const cbChecked=allSelected?'checked':anySelected?'indeterminate':'';
+
+    const htr=document.createElement('tr');
+    htr.className='group-header'+(anySelected?' selected-group':'');
+    htr.id='group-'+g.key;
+    htr.innerHTML=`
+      <td onclick="event.stopPropagation()">
+        <div class="cb-wrap">
+          <input type="checkbox" id="cb-group-${g.key}" ${allSelected?'checked':''} onchange="toggleGroup('${g.key}',this.checked)" title="Seleziona tutte le fatture del cliente">
+        </div>
+      </td>
+      <td onclick="toggleGroupExpand('${g.key}')">
+        <div style="display:flex;align-items:center;gap:4px">
+          <span class="group-toggle ${isExp?'open':''}" id="toggle-${g.key}">▶</span>
+          <div>
+            <div class="client-name">${g.nome}${dilBadge}${emailBadge}</div>
+            <div class="group-summary">${g.invs.length} fattur${g.invs.length>1?'e':'a'} · più vecchia: ${g.invs[0].data}</div>
+            ${cNoteSnip}
+          </div>
+        </div>
+      </td>
+      <td onclick="toggleGroupExpand('${g.key}')">${sedeLbl}</td>
+      <td onclick="toggleGroupExpand('${g.key}')" style="font-family:var(--mono);font-size:12px">${g.invs.length}</td>
+      <td onclick="toggleGroupExpand('${g.key}')"><span class="age-badge ${worst}">${dot} ${oldestAge.days}gg</span></td>
+      <td onclick="toggleGroupExpand('${g.key}')"><span class="amount">${g.totalDaPagare.toLocaleString('it-IT',{style:'currency',currency:'EUR'})}</span></td>
+      <td>
+        <div class="actions">
+          <button class="btn-sm" onclick="toggleClientNote('${g.key}')">📝 Nota</button>
+          <button class="btn-sm" onclick="openDilModal('${g.key}','${esc(g.nome)}')">⏱ Dilaz.</button>
+          <button class="btn-sm" onclick="editEmail('${g.key}','${esc(g.nome)}','${esc(email)}')" title="${email||'Aggiungi email'}">${email?'✉ Email':'+ Email'}</button>
+        </div>
+      </td>`;
+    tbody.appendChild(htr);
+
+    // Set indeterminate state
+    if (anySelected && !allSelected) {
+      const cb=document.getElementById('cb-group-'+g.key);
+      if (cb) cb.indeterminate=true;
+    }
+
+    // Client note row
+    const cnr=document.createElement('tr');
+    cnr.className='client-note-row';
+    cnr.id='client-note-row-'+g.key;
+    cnr.style.display='none';
+    cnr.innerHTML=`<td colspan="7">
+      <textarea class="note-area" id="client-note-area-${g.key}" placeholder="Nota cliente…">${cNote}</textarea>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <button class="btn-sm" onclick="saveClientNote('${g.key}')">Salva</button>
+        <button class="btn-sm danger" onclick="deleteClientNote('${g.key}')">Elimina</button>
+        <button class="btn-sm" onclick="toggleClientNote('${g.key}')">Chiudi</button>
+      </div></td>`;
+    tbody.appendChild(cnr);
+
+    // Invoice child rows
+    if (isExp){
+      for (const inv of g.invs){
+        const age=getAge(inv);
+        const iNote=crm.notes[inv.id]||'';
+        const adot=age.color==='red'?'🔴':age.color==='orange'?'🟠':'🟢';
+        const iNoteSnip=iNote?`<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:2px" title="${esc(iNote)}">📝 ${iNote}</div>`:'';
+        const iSel=selectedInvIds.has(inv.id);
+        // Sent log
+        const sentEntries=(crm.sentLog[inv.id]||[]);
+        const lastSent=sentEntries.length?sentEntries[sentEntries.length-1]:null;
+        const sentSnip=lastSent?`<span class="sent-badge">inviato ${lastSent.date}</span>`:'';
+
+        const itr=document.createElement('tr');
+        itr.className='inv-row'+(iSel?' inv-selected':'');
+        itr.innerHTML=`
+          <td><div class="cb-wrap"><input type="checkbox" ${iSel?'checked':''} onchange="toggleInvSel('${inv.id}',this.checked)"></div></td>
+          <td><span class="inv-number">${inv.numero}</span> ${sentSnip} ${iNoteSnip}</td>
+          <td></td>
+          <td style="font-size:12px;color:var(--muted)">${inv.data}</td>
+          <td><span class="age-badge ${age.color}">${adot} ${age.days}gg</span></td>
+          <td><span class="amount">${inv.da_pagare.toLocaleString('it-IT',{style:'currency',currency:'EUR'})}</span></td>
+          <td><button class="btn-sm" onclick="toggleInvNote('${inv.id}')">📝 Nota</button></td>`;
+        tbody.appendChild(itr);
+
+        const inr=document.createElement('tr');
+        inr.className='note-row';
+        inr.id='note-row-'+inv.id;
+        inr.style.display='none';
+        inr.innerHTML=`<td colspan="7">
+          <textarea class="note-area" id="note-area-${inv.id}" placeholder="Nota fattura ${inv.numero}…">${iNote}</textarea>
+          <div style="display:flex;gap:6px;margin-top:6px">
+            <button class="btn-sm" onclick="saveInvNote('${inv.id}')">Salva</button>
+            <button class="btn-sm danger" onclick="deleteInvNote('${inv.id}')">Elimina</button>
+            <button class="btn-sm" onclick="toggleInvNote('${inv.id}')">Chiudi</button>
+          </div></td>`;
+        tbody.appendChild(inr);
+      }
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  SELECTION
+// ══════════════════════════════════════════════════════════════
+function toggleGroupExpand(key){
+  if (expandedGroups.has(key)) expandedGroups.delete(key);
+  else expandedGroups.add(key);
+  renderTable();
+}
+
+function toggleGroup(key, checked){
+  const group=groupInvoices(invoices).find(g=>g.key===key);
+  if (!group) return;
+  for (const inv of group.invs){
+    if (checked) selectedInvIds.add(inv.id);
+    else selectedInvIds.delete(inv.id);
+  }
+  updateActionBar(); renderTable();
+}
+
+function toggleInvSel(id, checked){
+  if (checked) selectedInvIds.add(id);
+  else selectedInvIds.delete(id);
+  updateActionBar(); renderTable();
+}
+
+function toggleAllVisible(cb){
+  const filtered=invoices.filter(inv=>{
+    if (activeSede!=='all'&&inv.sede!==activeSede) return false;
+    if (activeFilter!=='all'&&getAge(inv).color!==activeFilter) return false;
+    if (searchQuery&&!inv.cliente.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    return true;
+  });
+  for (const inv of filtered){
+    if (cb.checked) selectedInvIds.add(inv.id);
+    else selectedInvIds.delete(inv.id);
+  }
+  updateActionBar(); renderTable();
+}
+
+function selectAllRed(){
+  for (const inv of invoices){
+    if (getAge(inv).color==='red') selectedInvIds.add(inv.id);
+  }
+  updateActionBar(); renderTable();
+}
+
+function clearSelection(){
+  selectedInvIds.clear();
+  updateActionBar(); renderTable();
+}
+
+function updateActionBar(){
+  const count=selectedInvIds.size;
+  const total=invoices.filter(i=>selectedInvIds.has(i.id)).reduce((s,i)=>s+i.da_pagare,0);
+  const bar=document.getElementById('action-bar');
+  bar.classList.toggle('show', count>0);
+  document.getElementById('sel-count').textContent=count;
+  document.getElementById('sel-amount').textContent=count>0?'· '+total.toLocaleString('it-IT',{style:'currency',currency:'EUR'}):'';
+}
+
+// ══════════════════════════════════════════════════════════════
+//  EMAIL — INLINE EDIT
+// ══════════════════════════════════════════════════════════════
+function editEmail(key, nome, current){
+  const email=prompt(`Email per ${nome}:`, current||'');
+  if (email===null) return;
+  setEmail(key, email);
+  renderTable();
+  toast(email ? 'Email aggiornata' : 'Email rimossa');
+}
+
+// ══════════════════════════════════════════════════════════════
+//  TEMPLATE
+// ══════════════════════════════════════════════════════════════
+function openTemplateModal(){
+  document.getElementById('tpl-subject').value=crm.template.subject||DEFAULT_SUBJECT;
+  document.getElementById('tpl-body').value=crm.template.body||DEFAULT_BODY;
+  openModal('modal-template');
+}
+function saveTemplate(){
+  crm.template={subject:document.getElementById('tpl-subject').value, body:document.getElementById('tpl-body').value};
+  saveCRM(); closeModal('modal-template'); toast('Template salvato');
+}
+function resetTemplate(){
+  document.getElementById('tpl-subject').value=DEFAULT_SUBJECT;
+  document.getElementById('tpl-body').value=DEFAULT_BODY;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  SOLLECITO — BUILD & SEND
+// ══════════════════════════════════════════════════════════════
+function openSollecito(){
+  if (!selectedInvIds.size){ toast('Seleziona almeno una fattura', true); return; }
+  if (!driveToken){
+    toast('Connettiti prima a Google Drive / Gmail (OAuth necessario per invio mail)', true); return;
+  }
+
+  // Load template into preview fields
+  document.getElementById('sol-subject-preview').value=crm.template.subject||DEFAULT_SUBJECT;
+  document.getElementById('sol-body-preview').value=crm.template.body||DEFAULT_BODY;
+
+  // Build groups from selection
+  const selInv=invoices.filter(i=>selectedInvIds.has(i.id));
+  const groups=groupInvoices(selInv);
+
+  const list=document.getElementById('sollecito-list');
+  list.innerHTML='';
+  for (const g of groups){
+    const email=getEmail(g.key);
+    const div=document.createElement('div');
+    div.className='sollecito-item'+(email?'':' no-email');
+    div.id='sol-item-'+g.key;
+    const invLines=g.invs.map(i=>`Nr. ${i.numero} del ${i.data} — ${i.da_pagare.toLocaleString('it-IT',{style:'currency',currency:'EUR'})}`).join('\n');
+    div.innerHTML=`
+      <div class="sol-header">
+        <div class="sol-client">${g.nome}</div>
+        <div style="font-size:11px;color:var(--muted)">${g.invs.length} fattur${g.invs.length>1?'e':'a'} · ${g.totalDaPagare.toLocaleString('it-IT',{style:'currency',currency:'EUR'})}</div>
+      </div>
+      <div class="sol-email">
+        <span style="color:var(--muted);margin-right:6px">A:</span>
+        <input type="email" id="sol-email-${g.key}" value="${email}" placeholder="email@cliente.it" oninput="crm.emailDB['${g.key}']=this.value">
+      </div>
+      ${!email?'<div class="sol-warning">⚠ Email mancante — aggiungila qui sopra per inviare</div>':''}
+      <div class="sol-invoices" style="white-space:pre;margin-top:6px;font-family:var(--mono);font-size:11px">${invLines}</div>`;
+    list.appendChild(div);
+  }
+
+  document.getElementById('send-progress').classList.remove('show');
+  document.getElementById('btn-send-all').disabled=false;
+  document.getElementById('btn-send-all').textContent='✉ Invia a tutti';
+  openModal('modal-sollecito');
+}
+
+function buildEmailBody(clienteNome, invs, sede){
+  const subject=document.getElementById('sol-subject-preview').value;
+  const body=document.getElementById('sol-body-preview').value;
+  const lista=invs.map(i=>`  • Fattura ${i.numero} del ${i.data}: ${i.da_pagare.toLocaleString('it-IT',{style:'currency',currency:'EUR'})}`).join('\n');
+  const totale=invs.reduce((s,i)=>s+i.da_pagare,0).toLocaleString('it-IT',{style:'currency',currency:'EUR'});
+  const oggi=new Date().toLocaleDateString('it-IT',{day:'2-digit',month:'long',year:'numeric'});
+  const sedeName=sede==='par'?'Parella':'Rebaudengo';
+  const filled=body
+    .replace(/\{\{cliente\}\}/g,clienteNome)
+    .replace(/\{\{lista_fatture\}\}/g,lista)
+    .replace(/\{\{totale\}\}/g,totale)
+    .replace(/\{\{sede\}\}/g,sedeName)
+    .replace(/\{\{data_oggi\}\}/g,oggi);
+  return {subject,body:filled};
+}
+
+async function sendAllSolleciti(){
+  const selInv=invoices.filter(i=>selectedInvIds.has(i.id));
+  const groups=groupInvoices(selInv);
+
+  // Collect emails from input fields (user may have typed them in)
+  for (const g of groups){
+    const inp=document.getElementById('sol-email-'+g.key);
+    if (inp&&inp.value.trim()) crm.emailDB[g.key]=inp.value.trim();
+  }
+
+  const toSend=groups.filter(g=>crm.emailDB[g.key]);
+  const skipped=groups.filter(g=>!crm.emailDB[g.key]);
+
+  if (!toSend.length){ toast('Nessun destinatario con email valida', true); return; }
+
+  const btn=document.getElementById('btn-send-all');
+  btn.disabled=true;
+  const prog=document.getElementById('send-progress');
+  prog.classList.add('show');
+  let sent=0;
+  const errors=[];
+
+  for (const g of toSend){
+    document.getElementById('send-progress-text').textContent=`Invio a ${g.nome}… (${sent+1}/${toSend.length})`;
+    document.getElementById('send-progress-bar').style.width=Math.round((sent/toSend.length)*100)+'%';
+    try {
+      const {subject,body}=buildEmailBody(g.nome,g.invs,g.sede);
+      await gmailSend(crm.emailDB[g.key],subject,body);
+      // Log sends
+      const dateStr=new Date().toLocaleDateString('it-IT');
+      for (const inv of g.invs){
+        if (!crm.sentLog[inv.id]) crm.sentLog[inv.id]=[];
+        crm.sentLog[inv.id].push({date:dateStr,to:crm.emailDB[g.key]});
+      }
+      sent++;
+    } catch(e){
+      errors.push(g.nome+': '+e.message);
+    }
+  }
+
+  document.getElementById('send-progress-bar').style.width='100%';
+  await saveCRM();
+  renderTable();
+  closeModal('modal-sollecito');
+  clearSelection(); updateActionBar();
+
+  let msg=`✉ Inviati ${sent} solleciti`;
+  if (skipped.length) msg+=` · ${skipped.length} saltati (no email)`;
+  if (errors.length) msg+=` · ${errors.length} errori`;
+  toast(msg, errors.length>0);
+}
+
+// ── Gmail send via API ──
+async function gmailSend(to, subject, body){
+  // RFC 2822 message
+  const msg=[
+    `From: Calibra Pratiche Auto <${SENDER_EMAIL}>`,
+    `To: ${to}`,
+    `Subject: ${subject}`,
+    `Content-Type: text/plain; charset=utf-8`,
+    ``,
+    body
+  ].join('\r\n');
+
+  // Base64url encode
+  const encoded=btoa(unescape(encodeURIComponent(msg)))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+
+  const res=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',{
+    method:'POST',
+    headers:{ Authorization:'Bearer '+driveToken, 'Content-Type':'application/json' },
+    body: JSON.stringify({raw:encoded}),
+  });
+  if (!res.ok){
+    const err=await res.json();
+    throw new Error(err.error?.message||'Errore Gmail API');
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  NOTES
+// ══════════════════════════════════════════════════════════════
+function toggleClientNote(key){
+  const r=document.getElementById('client-note-row-'+key);
+  const open=r.style.display==='none';
+  r.style.display=open?'table-row':'none';
+  if (open) document.getElementById('client-note-area-'+key).focus();
+}
+async function saveClientNote(key){
+  if (!crm.clientNotes) crm.clientNotes={};
+  crm.clientNotes[key]=document.getElementById('client-note-area-'+key).value.trim();
+  await saveCRM(); renderTable(); toast('Nota cliente salvata');
+}
+async function deleteClientNote(key){delete crm.clientNotes[key];await saveCRM();renderTable();toast('Nota eliminata');}
+function toggleInvNote(id){
+  const r=document.getElementById('note-row-'+id);
+  const open=r.style.display==='none';
+  r.style.display=open?'table-row':'none';
+  if (open) document.getElementById('note-area-'+id).focus();
+}
+async function saveInvNote(id){crm.notes[id]=document.getElementById('note-area-'+id).value.trim();await saveCRM();renderTable();toast('Nota salvata');}
+async function deleteInvNote(id){delete crm.notes[id];await saveCRM();renderTable();toast('Nota eliminata');}
+
+// ══════════════════════════════════════════════════════════════
+//  DILAZIONI
+// ══════════════════════════════════════════════════════════════
+function openDilModal(key,nome){
+  dilModalKey=key;
+  const ex=crm.dilazioni[key];
+  document.getElementById('dil-cliente').value=nome;
+  document.getElementById('dil-giorni').value=ex?ex.giorni:'';
+  document.getElementById('dil-nota').value=ex?(ex.nota||''):'';
+  document.getElementById('btn-dil-remove').style.display=ex?'inline-block':'none';
+  openModal('modal-dil');
+  document.getElementById('dil-giorni').focus();
+}
+async function saveDilazione(){
+  if (!dilModalKey) return;
+  const giorni=parseInt(document.getElementById('dil-giorni').value);
+  const nota=document.getElementById('dil-nota').value.trim();
+  if (isNaN(giorni)||giorni<0){toast('Inserisci giorni validi',true);return;}
+  crm.dilazioni[dilModalKey]={giorni,nota};
+  await saveCRM(); closeModal('modal-dil'); updateKPIs(); renderTable();
+  toast('Dilazione '+giorni+'gg salvata');
+}
+async function removeDilazione(){
+  if (!dilModalKey) return;
+  delete crm.dilazioni[dilModalKey];
+  await saveCRM(); closeModal('modal-dil'); updateKPIs(); renderTable();
+  toast('Dilazione rimossa');
+}
+
+// ══════════════════════════════════════════════════════════════
+//  UTILS
+// ══════════════════════════════════════════════════════════════
+function esc(s){return (s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');}
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');dilModalKey=null;}
+function setFilter(f,btn){activeFilter=f;document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderTable();}
+function setSede(s,btn){activeSede=s;document.querySelectorAll('.sede-tab').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderTable();}
+function setSearch(v){searchQuery=v;renderTable();}
+
+function toast(msg,isErr=false){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.style.borderColor=isErr?'var(--red)':'var(--green)';
+  el.classList.add('show');setTimeout(()=>el.classList.remove('show'),3500);
+}
+
+// Wire template button
+document.querySelector('[onclick="openModal(\'modal-template\')"]').addEventListener('click',()=>{
+  document.getElementById('tpl-subject').value=crm.template.subject||DEFAULT_SUBJECT;
+  document.getElementById('tpl-body').value=crm.template.body||DEFAULT_BODY;
+});
+
+// Wire drive status button
+document.getElementById('drive-status').addEventListener('click',()=>{
+  document.getElementById('drive-client-id').value=getDriveClientId();
+  document.getElementById('btn-drive-disconnect').style.display=driveToken?'inline-block':'none';
+  openModal('modal-drive');
+});
+
+// Close modals on overlay or Escape
+document.querySelectorAll('.modal-overlay').forEach(el=>{
+  el.addEventListener('click',e=>{if(e.target===el)closeModal(el.id);});
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape') document.querySelectorAll('.modal-overlay.open').forEach(el=>closeModal(el.id));
+});
+
+// ══════════════════════════════════════════════════════════════
+//  BOOT
+// ══════════════════════════════════════════════════════════════
+window.addEventListener('load',()=>{
+  const wasAuth=checkDriveAuthReturn();
+  if (!wasAuth&&getDriveClientId()){
+    document.getElementById('drive-lbl').textContent='Drive: configurato (clicca per connettere)';
+  }
+});
+</script>
+</body>
+</html>
