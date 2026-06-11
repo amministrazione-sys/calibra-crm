@@ -404,24 +404,6 @@ hr.divider{border:none;border-top:1px solid var(--border);margin:14px 0}
   </div>
 </div>
 
-<!-- ══ MODAL: TOKEN PASTE ══ -->
-<div class="modal-overlay" id="modal-token-paste">
-  <div class="modal">
-    <h3>🔑 Incolla il token di autorizzazione</h3>
-    <div class="drive-step" style="margin-bottom:14px">
-      Si è aperta una nuova scheda con la schermata di consenso Google.<br><br>
-      <strong>1.</strong> Accedi con <code>amministrazione@calibrapa.com</code> e autorizza<br>
-      <strong>2.</strong> Il browser ti porta su una pagina <code>localhost</code> con errore — è normale<br>
-      <strong>3.</strong> <strong>Copia l'intero URL</strong> dalla barra del browser di quella scheda<br>
-      <strong>4.</strong> Incollalo qui sotto e clicca Connetti
-    </div>
-    <label>URL dalla barra del browser (scheda localhost)</label>
-    <textarea id="token-paste-input" rows="3" placeholder="https://localhost/#access_token=ya29.xxxxx..."></textarea>
-    <div class="modal-actions">
-      <button class="btn-modal-cancel" onclick="closeModal('modal-token-paste')">Annulla</button>
-      <button class="btn-modal-ok" onclick="confirmTokenPaste()">Connetti</button>
-    </div>
-  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -521,62 +503,30 @@ function driveConnect() {
   if (!cid) { toast('Inserisci il Client ID', true); return; }
   localStorage.setItem('calibra_drive_client_id', cid);
   closeModal('modal-drive');
-  // Open Google OAuth in a new tab — redirect goes to https://localhost
-  // The token appears in the URL bar of that tab; user copies it back here
+  const redirectUri = window.location.href.split('#')[0].split('?')[0];
   const params = new URLSearchParams({
     client_id:     cid,
-    redirect_uri:  'https://localhost',
+    redirect_uri:  redirectUri,
     response_type: 'token',
     scope:         DRIVE_SCOPE,
   });
-  const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + params;
-  window.open(authUrl, '_blank');
-  // Show token paste dialog after a short delay
-  setTimeout(() => openTokenPasteModal(), 1500);
-}
-
-function openTokenPasteModal() {
-  // Show instructions modal for pasting the token from localhost URL
-  const overlay = document.getElementById('modal-token-paste');
-  overlay.classList.add('open');
-  document.getElementById('token-paste-input').value = '';
-  document.getElementById('token-paste-input').focus();
-}
-
-function confirmTokenPaste() {
-  const raw = document.getElementById('token-paste-input').value.trim();
-  if (!raw) { toast('Incolla l\'URL o il token', true); return; }
-
-  let token = raw;
-  // If user pasted the full URL, extract access_token from fragment
-  if (raw.includes('access_token=')) {
-    const fragment = raw.includes('#') ? raw.split('#')[1] : raw.split('?')[1] || '';
-    const p = new URLSearchParams(fragment);
-    token = p.get('access_token') || '';
-  }
-  if (!token) { toast('Token non trovato nell\'URL — riprova', true); return; }
-
-  driveToken = token;
-  closeModal('modal-token-paste');
-  setDriveStatus('syncing','Drive: sincronizzazione…');
-  toast('✓ Token acquisito — carico dati da Drive…');
-  driveLoad().then(() => { setDriveStatus('connected','Drive: sincronizzato ✓'); renderTable(); updateKPIs(); });
+  window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params;
 }
 
 function checkDriveAuthReturn() {
-  // Legacy: handle if somehow token arrives in hash of this page
   const hash = window.location.hash;
   if (!hash.includes('access_token')) return false;
   const p = new URLSearchParams(hash.substring(1));
   const token = p.get('access_token');
   if (!token) return false;
   driveToken = token;
-  history.replaceState(null,'',window.location.pathname);
-  setDriveStatus('syncing','Drive: sincronizzazione…');
+  history.replaceState(null, '', window.location.pathname);
+  setDriveStatus('syncing', 'Drive: sincronizzazione…');
   toast('✓ Connesso a Google Drive — carico dati…');
-  driveLoad().then(() => { setDriveStatus('connected','Drive: sincronizzato ✓'); renderTable(); updateKPIs(); });
+  driveLoad().then(() => { setDriveStatus('connected', 'Drive: sincronizzato ✓'); renderTable(); updateKPIs(); });
   return true;
 }
+
 
 function setDriveStatus(cls, lbl) {
   const el = document.getElementById('drive-status');
