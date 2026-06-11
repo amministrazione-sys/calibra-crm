@@ -90,6 +90,8 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
 .btn-deselect:hover{color:var(--text);border-color:var(--text)}
 .btn-sel-red{background:transparent;color:var(--red);border:1px solid var(--red);border-radius:6px;padding:7px 12px;font-size:12px;cursor:pointer;font-family:var(--sans)}
 .btn-sel-red:hover{background:var(--red-bg)}
+.btn-export-pdf{background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:6px;padding:7px 12px;font-size:12px;cursor:pointer;font-family:var(--sans)}
+.btn-export-pdf:hover{border-color:var(--orange);color:var(--orange)}
 
 /* TABLE */
 .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
@@ -285,6 +287,7 @@ hr.divider{border:none;border-top:1px solid var(--border);margin:14px 0}
     </div>
     <button class="btn-sel-red" onclick="selectAllRed()">Seleziona tutte le 🔴</button>
     <button class="btn-deselect" onclick="clearSelection()">Deseleziona tutto</button>
+    <button class="btn-export-pdf" onclick="exportPDFChiamate()">📋 Esporta PDF chiamate</button>
     <button class="btn-sollecito" onclick="openSollecito()">✉ Invia solleciti</button>
   </div>
 
@@ -1238,6 +1241,118 @@ document.getElementById('drive-status').addEventListener('click',()=>{
 document.querySelectorAll('.modal-overlay').forEach(el=>{
   el.addEventListener('click',e=>{if(e.target===el)closeModal(el.id);});
 });
+
+// ══════════════════════════════════════════════════════════════
+//  EXPORT PDF CHIAMATE
+// ══════════════════════════════════════════════════════════════
+function exportPDFChiamate() {
+  if (!selectedInvIds.size) { toast('Seleziona almeno una fattura', true); return; }
+
+  const selInv = invoices.filter(i => selectedInvIds.has(i.id));
+  const groups = groupInvoices(selInv);
+  const oggi   = new Date().toLocaleDateString('it-IT', {day:'2-digit', month:'long', year:'numeric'});
+  const today  = new Date(); today.setHours(0,0,0,0);
+
+  // Build HTML for print window
+  let rows = '';
+  for (const g of groups) {
+    const worst = g.worstColor;
+    const dot   = worst==='red'?'🔴':worst==='orange'?'🟠':'🟢';
+    const sede  = g.sede==='par'?'Parella':'Rebaudengo';
+    for (const inv of g.invs) {
+      const days = Math.floor((today - inv.dataObj) / 86400000);
+      const color = worst==='red'?'#ef4444':worst==='orange'?'#f59e0b':'#22c55e';
+      rows += `<tr>
+        <td>${g.nome}</td>
+        <td>${sede}</td>
+        <td style="font-family:monospace">${inv.numero}</td>
+        <td>${inv.data}</td>
+        <td style="text-align:right;font-family:monospace">${inv.da_pagare.toLocaleString('it-IT',{style:'currency',currency:'EUR'})}</td>
+        <td style="text-align:center"><span style="color:${color};font-weight:700">${dot} ${days}gg</span></td>
+      </tr>`;
+    }
+    // Subtotal row per client if more than 1 invoice
+    if (g.invs.length > 1) {
+      rows += `<tr style="background:#f8f8f8;font-weight:600">
+        <td colspan="4" style="text-align:right;color:#666;font-size:11px">Totale ${g.nome}</td>
+        <td style="text-align:right;font-family:monospace">${g.totalDaPagare.toLocaleString('it-IT',{style:'currency',currency:'EUR'})}</td>
+        <td></td>
+      </tr>`;
+    }
+  }
+
+  const totaleGenerale = selInv.reduce((s,i) => s+i.da_pagare, 0);
+  const nClienti = groups.length;
+
+  const html = `<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Calibra — Lista chiamate ${oggi}</title>
+<style>
+  body { font-family: Arial, sans-serif; font-size: 12px; color: #1a1a1a; margin: 0; padding: 24px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; border-bottom: 2px solid #1a1a1a; padding-bottom: 12px; }
+  .brand { font-size: 20px; font-weight: 700; letter-spacing: .02em; }
+  .brand span { color: #4f7fff; }
+  .meta { text-align: right; font-size: 11px; color: #666; line-height: 1.7; }
+  h2 { font-size: 14px; font-weight: 600; margin: 0 0 16px 0; color: #333; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+  thead th { background: #1a1a1a; color: #fff; padding: 8px 10px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+  tbody tr { border-bottom: 1px solid #e5e5e5; }
+  tbody tr:nth-child(even) { background: #fafafa; }
+  tbody td { padding: 7px 10px; }
+  .footer { border-top: 2px solid #1a1a1a; padding-top: 10px; display: flex; justify-content: space-between; font-size: 11px; color: #666; }
+  .totale { font-size: 14px; font-weight: 700; color: #1a1a1a; }
+  .note-box { border: 1px solid #ddd; border-radius: 4px; padding: 8px 12px; margin-bottom: 20px; font-size: 11px; color: #666; }
+  @media print { body { padding: 0; } }
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <div class="brand">Calibra <span>·</span> Pratiche Auto</div>
+    <div style="font-size:11px;color:#666;margin-top:4px">Lista chiamate di sollecito</div>
+  </div>
+  <div class="meta">
+    Data: <strong>${oggi}</strong><br>
+    Clienti: <strong>${nClienti}</strong><br>
+    Fatture: <strong>${selInv.length}</strong>
+  </div>
+</div>
+
+<div class="note-box">
+  📞 Lista preparata per contatto telefonico diretto dalla sede. Per i solleciti via email usare il CRM.
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Cliente</th>
+      <th>Sede</th>
+      <th>Fattura</th>
+      <th>Data emissione</th>
+      <th style="text-align:right">Da incassare</th>
+      <th style="text-align:center">Età</th>
+    </tr>
+  </thead>
+  <tbody>${rows}</tbody>
+</table>
+
+<div class="footer">
+  <div>Calibra Pratiche Auto — amministrazione@calibrapa.com</div>
+  <div class="totale">Totale da incassare: ${totaleGenerale.toLocaleString('it-IT',{style:'currency',currency:'EUR'})}</div>
+</div>
+</body>
+</html>`;
+
+  // Open print window
+  const w = window.open('', '_blank', 'width=900,height=700');
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 500);
+}
+
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape') document.querySelectorAll('.modal-overlay.open').forEach(el=>closeModal(el.id));
 });
